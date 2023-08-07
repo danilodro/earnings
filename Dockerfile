@@ -16,4 +16,4 @@ RUN pip install python-dateutil
 EXPOSE 1508
 
 # CMD para iniciar o app
-CMD [ "uvicorn", "automation:app", "--host", "0.0.0.0", "--port", "1508" ]
+CMD [ "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "1508" ]
