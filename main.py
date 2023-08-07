@@ -27,8 +27,6 @@ async def add_chatbot(chatbot: str = Body(...), key: str = Body(...)):
     return {"chatbot": chatbot, "key": key}
 
 # Rota para buscar chatbot e key
-
-
 @app.post("/search-chatbot")
 async def search_chatbot(chatbot_data: dict = Body(...)):
     # Buscar chatbot no banco de dados
@@ -45,8 +43,6 @@ async def search_chatbot(chatbot_data: dict = Body(...)):
     return {"chatbot": chatbot_data["chatbot"], "key": chatbot_data["key"]}
 
 # Rota para editar chatbot
-
-
 @app.put("/edit-chatbot")
 async def edit_chatbot(chatbot: str = Body(...), key: str = Body(...)):
     # Verificar se o chatbot existe no banco de dados
@@ -59,8 +55,6 @@ async def edit_chatbot(chatbot: str = Body(...), key: str = Body(...)):
     return {"message": "Chatbot atualizado com sucesso.", "chatbot": chatbot, "key": key}
 
 # Rota para excluir chatbot
-
-
 @app.delete("/delete-chatbot")
 async def delete_chatbot(chatbot: str):
     # Verificar se o chatbot existe no banco de dados
@@ -80,9 +74,15 @@ def get_chatbots_from_db():
                 for chatbot in chatbots_data]
     return chatbots
 
+# Rota para retornar todos os chatbots com suas chaves
+@app.get("/get-chatbots")
+async def get_chatbots():
+    # Consultar o banco de dados para obter todos os chatbots com suas chaves
+    chatbots_data = collection.find({}, {"_id": 0, "chatbot": 1, "key": 1})
+    chatbots = [{"chatbot": chatbot["chatbot"], "key": chatbot["key"]} for chatbot in chatbots_data]
+    return {"chatbots": chatbots}
+
 # Função para realizar a requisição POST para a URL específica com a chave de autorização
-
-
 async def make_request(url, headers, data):
     try:
         async with httpx.AsyncClient() as client:
@@ -103,8 +103,6 @@ def date_difference_in_days(start_date, end_date):
     return difference + 1  # Adicionamos 1 para incluir o dia final no cálculo
 
 # Rota para o helper-events
-
-
 @app.post("/helper-events")
 async def helper_events(event_data: dict = Body(...)):
     try:
