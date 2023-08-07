@@ -139,6 +139,7 @@ async def helper_events(event_data: dict = Body(...)):
         total = defaultdict(int)
 
         for i, response in enumerate(responses):
+            chatbot_name = chatbots[i]["chatbot"]
             data = response.json()
             items = data["resource"]["items"]
 
@@ -148,15 +149,22 @@ async def helper_events(event_data: dict = Body(...)):
                 count = item["count"]
                 totals[action] = count
 
-            chatbot_name = chatbots[i]["chatbot"]
-            chatbots[i].update(totals)  # Atualiza diretamente os valores no chatbot correspondente
+            # Adicionar a data formatada na resposta
+            metadata = data.get("metadata", {})
+            uri = metadata.get("#command.uri", "")
+            start_date = uri.split("startDate=")[1].split("&")[0]
+            end_date = uri.split("endDate=")[1]
+            formatted_date = f"{start_date} até {end_date}"
 
-            # Atualiza o total de cada ação em todos os chatbots
+            # Adicionar os totais e a data formatada ao resultado
+            result = {**totals, "Data": formatted_date}
+            results[chatbot_name] = result
+
+            # Atualizar o total de cada ação em todos os chatbots
             for action, count in totals.items():
                 total[action] += count
 
         # Adiciona o total de todas as ações em todos os chatbots aos resultados
-        results.update({chatbot["chatbot"]: chatbot for chatbot in chatbots})
         results["total dos bots"] = total
 
         # Calcular os totais das métricas de todos os chatbots
@@ -214,22 +222,22 @@ async def helper_interaction(event_data: dict = Body(...)):
                                     detail="Erro ao fazer a requisição com as chaves.")
 
         # Processar as respostas e calcular o total de interações de fluxo para cada chatbot
+        results = {}
         total_interacoes_geral = 0
 
         for i, response in enumerate(responses):
+            chatbot_name = chatbots[i]["chatbot"]
             data = response.json()
             items = data["resource"]["items"]
 
             total_interacoes = sum(item["count"] for item in items)
-            chatbot_name = chatbots[i]["chatbot"]
-            # Atualiza o valor de total_interacoes_geral com o valor atual
+            results[chatbot_name] = {
+                "Total Interacoes-Fluxo": total_interacoes}
             total_interacoes_geral += total_interacoes
-            # Atualiza diretamente o valor no chatbot correspondente
-            chatbots[i]["Total-Interacoes-Fluxo"] = total_interacoes
 
         # Adicionar o total de interações de fluxo de todos os chatbots aos resultados
-        results = {"Total-Geral": {"Total-Interacoes-Fluxo": total_interacoes_geral}}
-        results.update({chatbot["chatbot"]: chatbot for chatbot in chatbots})
+        results["Total-Geral"] = {
+            "Total-Interacoes-Fluxo": total_interacoes_geral}
 
         return results
 
