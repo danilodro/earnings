@@ -236,7 +236,7 @@ async def helper_interaction(event_data: dict = Body(...)):
             total_interacoes_geral += total_interacoes
 
         # Adicionar o total de interações de fluxo de todos os chatbots aos resultados
-        results["Total Geral"] = {
+        results["Total-Geral"] = {
             "Total-Interacoes-Fluxo": total_interacoes_geral}
 
         return results
