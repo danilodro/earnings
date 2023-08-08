@@ -157,7 +157,6 @@ async def helper_events(event_data: dict = Body(...)):
 
         # Adiciona o total de todas as ações em todos os chatbots aos resultados
         results.update({chatbot["chatbot"]: chatbot for chatbot in chatbots})
-        results["total dos bots"] = total
 
         # Calcular os totais das métricas de todos os chatbots
         total_abandono = total.get("Abandono de fluxo", 0)
@@ -167,7 +166,7 @@ async def helper_events(event_data: dict = Body(...)):
         # Criar um novo resultado com os totais das métricas
         total_result = {
             "Abandono de fluxo": total_abandono,
-            "Retidos-bot": total_retidos,
+            "Retidos_bot": total_retidos,
             "Retornou ao menu principal": total_menu_principal
         }
 
@@ -228,7 +227,7 @@ async def helper_interaction(event_data: dict = Body(...)):
             chatbots[i]["Total-Interacoes-Fluxo"] = total_interacoes
 
         # Adicionar o total de interações de fluxo de todos os chatbots aos resultados
-        results = {"Total-Geral": {"Total-Interacoes-Fluxo": total_interacoes_geral}}
+        results = {"Total_Interacoes": total_interacoes_geral}
         results.update({chatbot["chatbot"]: chatbot for chatbot in chatbots})
 
         return results
