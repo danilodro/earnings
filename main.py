@@ -5,6 +5,7 @@ import asyncio
 from collections import defaultdict
 from datetime import datetime
 import calendar
+from bson import ObjectId
 
 app = FastAPI()
 
@@ -15,6 +16,8 @@ db = client["earnings-Take"]
 collection = db["chatbot-earnings"]
 
 # Rota para adicionar chatbot e key
+
+
 @app.post("/add-chatbot", status_code=status.HTTP_201_CREATED)
 async def add_chatbot(chatbot: str = Body(...), key: str = Body(...)):
     # Verificar se o chatbot já existe no banco de dados
@@ -27,6 +30,8 @@ async def add_chatbot(chatbot: str = Body(...), key: str = Body(...)):
     return {"chatbot": chatbot, "key": key}
 
 # Rota para buscar chatbot e key
+
+
 @app.post("/search-chatbot")
 async def search_chatbot(chatbot_data: dict = Body(...)):
     # Buscar chatbot no banco de dados
@@ -43,6 +48,8 @@ async def search_chatbot(chatbot_data: dict = Body(...)):
     return {"chatbot": chatbot_data["chatbot"], "key": chatbot_data["key"]}
 
 # Rota para editar chatbot
+
+
 @app.put("/edit-chatbot")
 async def edit_chatbot(chatbot: str = Body(...), key: str = Body(...)):
     # Verificar se o chatbot existe no banco de dados
@@ -55,6 +62,8 @@ async def edit_chatbot(chatbot: str = Body(...), key: str = Body(...)):
     return {"message": "Chatbot atualizado com sucesso.", "chatbot": chatbot, "key": key}
 
 # Rota para excluir chatbot
+
+
 @app.delete("/delete-chatbot")
 async def delete_chatbot(chatbot: str):
     # Verificar se o chatbot existe no banco de dados
@@ -75,14 +84,19 @@ def get_chatbots_from_db():
     return chatbots
 
 # Rota para retornar todos os chatbots com suas chaves
+
+
 @app.get("/get-chatbots")
 async def get_chatbots():
     # Consultar o banco de dados para obter todos os chatbots com suas chaves
     chatbots_data = collection.find({}, {"_id": 0, "chatbot": 1, "key": 1})
-    chatbots = [{"chatbot": chatbot["chatbot"], "key": chatbot["key"]} for chatbot in chatbots_data]
+    chatbots = [{"chatbot": chatbot["chatbot"], "key": chatbot["key"]}
+                for chatbot in chatbots_data]
     return {"chatbots": chatbots}
 
 # Função para realizar a requisição POST para a URL específica com a chave de autorização
+
+
 async def make_request(url, headers, data):
     try:
         async with httpx.AsyncClient() as client:
@@ -103,39 +117,54 @@ def date_difference_in_days(start_date, end_date):
     return difference + 1  # Adicionamos 1 para incluir o dia final no cálculo
 
 # Rota para o helper-events
+
+
 @app.post("/helper-events")
 async def helper_events(event_data: dict = Body(...)):
     try:
+        month = event_data.get("month")
+        if not month:
+            raise HTTPException(
+                status_code=400, detail="Campo 'month' é obrigatório.")
+
         # Obter todas as chaves de chatbots
         chatbots = get_chatbots_from_db()
         if not chatbots:
             raise HTTPException(
                 status_code=404, detail="Nenhum chatbot encontrado no banco de dados.")
 
-        # Lista para armazenar as tarefas de requisição assíncrona
         tasks = []
+
+        # Calcular o ano e o número do mês
+        year = datetime.now().year
+        month_map = {
+            "janeiro": "01", "fevereiro": "02", "março": "03", "abril": "04",
+            "maio": "05", "junho": "06", "julho": "07", "agosto": "08",
+            "setembro": "09", "outubro": "10", "novembro": "11", "dezembro": "12"
+        }
+        month_number = month_map.get(month.lower())
+        if not month_number:
+            raise HTTPException(status_code=400, detail="Mês inválido.")
+
+        # Calcular as datas de início e fim do mês
+        start_date = f"{year}-{month_number}-01"
+        end_date = f"{year}-{month_number}-{calendar.monthrange(year, int(month_number))[1]}"
+
+        # Construir a URI com as datas calculadas
+        uri = f"/event-track/Metricas-Fluxo?startDate={start_date}&endDate={end_date}"
 
         # Realizar a requisição para cada chave de chatbot
         for chatbot in chatbots:
             key = chatbot.get("key")
             if key:
                 headers = {"Authorization": key}
-                task = asyncio.create_task(make_request(
-                    "https://intelbras.http.msging.net/commands", headers, event_data))
+                task = asyncio.create_task(make_request("https://intelbras.http.msging.net/commands", headers, {
+                                           "id": "444", "to": "postmaster@analytics.msging.net", "method": "get", "uri": uri}))
                 tasks.append(task)
 
-        # Aguardar todas as requisições serem concluídas
         responses = await asyncio.gather(*tasks)
 
-        # Verificar se todas as requisições foram bem-sucedidas
-        for response in responses:
-            if response.status_code != status.HTTP_200_OK:
-                raise HTTPException(status_code=response.status_code,
-                                    detail="Erro ao fazer a requisição com as chaves.")
-
-        # Processar as respostas e calcular os totais por ação para cada chatbot
         results = {}
-        # Inicializa um defaultdict para armazenar o total de cada ação em todos os chatbots
         total = defaultdict(int)
 
         for i, response in enumerate(responses):
@@ -149,35 +178,29 @@ async def helper_events(event_data: dict = Body(...)):
                 totals[action] = count
 
             chatbot_name = chatbots[i]["chatbot"]
-            chatbots[i].update(totals)  # Atualiza diretamente os valores no chatbot correspondente
+            chatbots[i].update(totals)
 
-            # Atualiza o total de cada ação em todos os chatbots
             for action, count in totals.items():
                 total[action] += count
 
-        # Adiciona o total de todas as ações em todos os chatbots aos resultados
-        results.update({chatbot["chatbot"]: chatbot for chatbot in chatbots})
-
-        # Calcular os totais das métricas de todos os chatbots
         total_abandono = total.get("Abandono de fluxo", 0)
         total_retidos = total.get("Retidos no bot", 0)
         total_menu_principal = total.get("Retornou ao menu principal", 0)
 
-        # Criar um novo resultado com os totais das métricas
         total_result = {
             "Abandono de fluxo": total_abandono,
             "Retidos_bot": total_retidos,
             "Retornou ao menu principal": total_menu_principal
         }
 
-        # Adicionar o novo resultado ao resultado geral
+        results.update({chatbot["chatbot"]: chatbot for chatbot in chatbots})
         results["total"] = total_result
 
         return results
 
     except Exception as exc:
         raise HTTPException(
-            status_code=500, detail=f"Erro desconhecido na helper-track.")
+            status_code=500, detail=f"Erro desconhecido: helper-events {exc}")
 
     # Rota para o helper-interaction
 
@@ -185,34 +208,48 @@ async def helper_events(event_data: dict = Body(...)):
 @app.post("/helper-interaction")
 async def helper_interaction(event_data: dict = Body(...)):
     try:
+        month = event_data.get("month")
+        if not month:
+            raise HTTPException(
+                status_code=400, detail="Campo 'month' é obrigatório.")
+
         # Obter todas as chaves de chatbots
         chatbots = get_chatbots_from_db()
         if not chatbots:
             raise HTTPException(
                 status_code=404, detail="Nenhum chatbot encontrado no banco de dados.")
 
-        # Lista para armazenar as tarefas de requisição assíncrona
         tasks = []
+
+        # Calcular o ano e o número do mês
+        year = datetime.now().year
+        month_map = {
+            "janeiro": "01", "fevereiro": "02", "março": "03", "abril": "04",
+            "maio": "05", "junho": "06", "julho": "07", "agosto": "08",
+            "setembro": "09", "outubro": "10", "novembro": "11", "dezembro": "12"
+        }
+        month_number = month_map.get(month.lower())
+        if not month_number:
+            raise HTTPException(status_code=400, detail="Mês inválido.")
+
+        # Calcular as datas de início e fim do mês
+        start_date = f"{year}-{month_number}-01"
+        end_date = f"{year}-{month_number}-{calendar.monthrange(year, int(month_number))[1]}"
+
+        # Construir a URI com as datas calculadas
+        uri = f"/event-track/Interacoes-Fluxo?startDate={start_date}&endDate={end_date}"
 
         # Realizar a requisição para cada chave de chatbot
         for chatbot in chatbots:
             key = chatbot.get("key")
             if key:
                 headers = {"Authorization": key}
-                task = asyncio.create_task(make_request(
-                    "https://intelbras.http.msging.net/commands", headers, event_data))
+                task = asyncio.create_task(make_request("https://intelbras.http.msging.net/commands", headers, {
+                                           "id": "444", "to": "postmaster@analytics.msging.net", "method": "get", "uri": uri}))
                 tasks.append(task)
 
-        # Aguardar todas as requisições serem concluídas
         responses = await asyncio.gather(*tasks)
 
-        # Verificar se todas as requisições foram bem-sucedidas
-        for response in responses:
-            if response.status_code != status.HTTP_200_OK:
-                raise HTTPException(status_code=response.status_code,
-                                    detail="Erro ao fazer a requisição com as chaves.")
-
-        # Processar as respostas e calcular o total de interações de fluxo para cada chatbot
         total_interacoes_geral = 0
 
         for i, response in enumerate(responses):
@@ -221,12 +258,9 @@ async def helper_interaction(event_data: dict = Body(...)):
 
             total_interacoes = sum(item["count"] for item in items)
             chatbot_name = chatbots[i]["chatbot"]
-            # Atualiza o valor de total_interacoes_geral com o valor atual
             total_interacoes_geral += total_interacoes
-            # Atualiza diretamente o valor no chatbot correspondente
             chatbots[i]["Total-Interacoes-Fluxo"] = total_interacoes
 
-        # Adicionar o total de interações de fluxo de todos os chatbots aos resultados
         results = {"Total_Interacoes": total_interacoes_geral}
         results.update({chatbot["chatbot"]: chatbot for chatbot in chatbots})
 
@@ -234,86 +268,84 @@ async def helper_interaction(event_data: dict = Body(...)):
 
     except Exception as exc:
         raise HTTPException(
-            status_code=500, detail=f"Erro desconhecido: helper-interaction{exc}")
-    
+            status_code=500, detail=f"Erro desconhecido: helper-interaction {exc}")
+
+# Rota para calcular a porcentagem de retenção
 
 
-# @app.post("/data-entry", status_code=status.HTTP_200_OK)
-# async def data_entry(data: dict = Body(...)):
-#     month = data.get("month")
-#     if not month:
-#         raise HTTPException(status_code=400, detail="Campo 'month' é obrigatório.")
+@app.post("/percentage", status_code=status.HTTP_200_OK)
+async def calculate_percentage(data: dict = Body(...)):
+    total_retention = float(data.get("retention"))
+    total_interaction = float(data.get("interaction"))
+    month = data.get("month")
 
-#     # Dicionário para mapear o nome do mês para o número do mês
-#     month_map = {
-#         "janeiro": "01",
-#         "fevereiro": "02",
-#         "março": "03",
-#         "abril": "04",
-#         "maio": "05",
-#         "junho": "06",
-#         "julho": "07",
-#         "agosto": "08",
-#         "setembro": "09",
-#         "outubro": "10",
-#         "novembro": "11",
-#         "dezembro": "12",
-#     }
+    if total_retention is None or total_interaction is None or month is None:
+        raise HTTPException(
+            status_code=400, detail="Os valores de 'retention', 'interaction' e 'month' são obrigatórios.")
 
-#     # Converter o nome do mês para o número do mês (com zero à esquerda, se necessário)
-#     month = month.lower()
-#     month_number = month_map.get(month)
-#     if not month_number:
-#         raise HTTPException(status_code=400, detail="Mês inválido. Certifique-se de digitar um mês válido em português.")
+    # Conexão com a coleção "earnings"
+    earnings_collection = db["earnings"]
 
-#     # Obter o primeiro e último dia do mês
-#     try:
-#         year = datetime.now().year  # Obtém o ano atual
-#         first_day = f"{year}-{month_number}-01"
-#         last_day = f"{year}-{month_number}-{calendar.monthrange(year, int(month_number))[1]}"
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Erro ao calcular o primeiro e último dia do mês: {e}")
+    try:
+        # Calcular a porcentagem de retenção
+        porcentagem_retention = (total_interaction / total_retention) * 100
 
-#     # Formatar os resultados no formato solicitado
-#     result = f"startDate={first_day}&endDate={last_day}"
+        # Garantir que a porcentagem esteja entre 0% e 100%
+        porcentagem_retention = max(0, min(100, porcentagem_retention))
 
-#     try:
-#         # Fazer a requisição ao helper-interaction com os dados do mês
-#         interaction_data = {
-#             "id": "444",
-#             "to": "postmaster@analytics.msging.net",
-#             "method": "get",
-#             "uri": f"/event-track/Interacoes-Fluxo?{result}"
-#         }
-#         interaction_response = await make_request("https://intelbras.http.msging.net/commands", headers={}, data=interaction_data)
-#         interaction_result = interaction_response.json()
+        # Formatando a porcentagem com duas casas decimais e o símbolo de porcentagem
+        formatted_porcentagem_retention = f"{porcentagem_retention:.2f}%"
 
-#         # Fazer a requisição ao helper-events com os dados do mês
-#         events_data = {
-#             "id": "444",
-#             "to": "postmaster@analytics.msging.net",
-#             "method": "get",
-#             "uri": f"/event-track/Retidos-no-bot?{result}"
-#         }
-#         events_response = await make_request("https://intelbras.http.msging.net/commands", headers={}, data=events_data)
-#         events_result = events_response.json()
+        # Formatando os valores para remover o ponto decimal e adicionar o símbolo de porcentagem
+        formatted_total_retention = f"{int(total_retention):,}".replace(
+            ",", ".")
+        formatted_total_interaction = f"{int(total_interaction):,}".replace(
+            ",", ".")
 
-#         # Obter o total de interações de fluxo e o total retidos no bot diretamente dos resultados
-#         interactions_total = interaction_result.get("resource", {}).get("total", {}).get("Total Interacoes-Fluxo", 0)
-#         events_retidos_total = events_result.get("resource", {}).get("total", {}).get("Retidos no bot", 1)  # Usamos 1 como valor padrão para evitar divisão por zero
+        # Criar um dicionário para o resultado final
+        result = {
+            "porcentagem_retention": formatted_porcentagem_retention,
+            "total_retention": formatted_total_retention,
+            "total_interaction": formatted_total_interaction
+        }
 
-#         # Calcular a porcentagem de interações de fluxo retidas no bot
-#         percentage = (interactions_total / events_retidos_total) * 100
+        # Salvar os dados formatados na coleção "earnings"
+        earnings_data = {
+            "month": month,
+            "total_retention": formatted_total_retention,
+            "total_interaction": formatted_total_interaction,
+            "porcentagem_retention": formatted_porcentagem_retention
+        }
+        earnings_collection.insert_one(earnings_data)
 
-#         # Criar um dicionário para o resultado final
-#         final_result = {
-#             "result": result,
-#             "interaction_result": interaction_result,
-#             "events_result": events_result,
-#             "percentage": percentage
-#         }
+        return result
 
-#         return final_result
+    except ZeroDivisionError:
+        raise HTTPException(
+            status_code=400, detail="O valor de 'retention' não pode ser zero.")
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Erro desconhecido: {exc}")
 
-#     except Exception as exc:
-#         raise HTTPException(status_code=500, detail=f"Erro desconhecido: {exc}")
+
+@app.get("/get-percentage-earning")
+async def get_percentage_earning(month: str):
+    # Conexão com a coleção "earnings"
+    earnings_collection = db["earnings"]
+
+    try:
+        # Buscar os dados na coleção "earnings" pelo mês especificado
+        earnings_data = earnings_collection.find_one({"month": month})
+
+        if not earnings_data:
+            raise HTTPException(
+                status_code=404, detail=f"Dados para o mês {month} não encontrados.")
+
+        # Converter o objeto ObjectId para uma string serializável
+        earnings_data["_id"] = str(earnings_data["_id"])
+
+        return earnings_data
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Erro desconhecido: {exc}")
