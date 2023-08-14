@@ -271,8 +271,6 @@ async def helper_interaction(event_data: dict = Body(...)):
             status_code=500, detail=f"Erro desconhecido: helper-interaction {exc}")
 
 # Rota para calcular a porcentagem de retenção
-
-
 @app.post("/percentage", status_code=status.HTTP_200_OK)
 async def calculate_percentage(data: dict = Body(...)):
     total_retention = float(data.get("retention"))
@@ -283,33 +281,26 @@ async def calculate_percentage(data: dict = Body(...)):
         raise HTTPException(
             status_code=400, detail="Os valores de 'retention', 'interaction' e 'month' são obrigatórios.")
 
+    # Calcular a porcentagem de retenção
+    porcentagem_retention = (total_interaction / total_retention) * 100
+
+    # Formatar os valores
+    formatted_porcentagem_retention = "{:.2f}".format(porcentagem_retention)[:2] + "%"  # Ajuste aqui
+    formatted_total_retention = "{:.0f}".format(total_retention)
+    formatted_total_interaction = "{:.0f}".format(total_interaction)
+
+    # Criar um dicionário para o resultado final
+    result = {
+        "porcentagem_retention": formatted_porcentagem_retention,
+        "total_retention": formatted_total_retention,
+        "total_interaction": formatted_total_interaction
+    }
+
     # Conexão com a coleção "earnings"
     earnings_collection = db["earnings"]
 
     try:
-        # Calcular a porcentagem de retenção
-        porcentagem_retention = (total_interaction / total_retention) * 100
-
-        # Garantir que a porcentagem esteja entre 0% e 100%
-        porcentagem_retention = max(0, min(100, porcentagem_retention))
-
-        # Formatando a porcentagem com duas casas decimais e o símbolo de porcentagem
-        formatted_porcentagem_retention = f"{porcentagem_retention:.2f}%"
-
-        # Formatando os valores para remover o ponto decimal e adicionar o símbolo de porcentagem
-        formatted_total_retention = f"{int(total_retention):,}".replace(
-            ",", ".")
-        formatted_total_interaction = f"{int(total_interaction):,}".replace(
-            ",", ".")
-
-        # Criar um dicionário para o resultado final
-        result = {
-            "porcentagem_retention": formatted_porcentagem_retention,
-            "total_retention": formatted_total_retention,
-            "total_interaction": formatted_total_interaction
-        }
-
-        # Salvar os dados formatados na coleção "earnings"
+        # Salvar os dados na coleção "earnings"
         earnings_data = {
             "month": month,
             "total_retention": formatted_total_retention,
@@ -326,6 +317,7 @@ async def calculate_percentage(data: dict = Body(...)):
     except Exception as exc:
         raise HTTPException(
             status_code=500, detail=f"Erro desconhecido: {exc}")
+
 
 
 @app.get("/get-percentage-earning")
