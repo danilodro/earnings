@@ -12,6 +12,7 @@ RUN pip install fastapi
 RUN pip install fastapi pymongo httpx
 RUN pip install uvicorn
 RUN pip install python-dateutil
+RUN pip install aiocache
 # Porta do container
 EXPOSE 1508
 
