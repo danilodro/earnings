@@ -139,7 +139,7 @@ async def helper_events(event_data: dict = Body(...)):
         # Construir a URI com as datas calculadas
         uri = f"/event-track/Metricas-Fluxo?startDate={start_date}&endDate={end_date}&$take=10000"
 
-        max_retries = 3  # Defina o número máximo de tentativas
+        max_retries = 2  # Defina o número máximo de tentativas
         for retry in range(max_retries):
             tasks = []  # Limpe as tarefas antes de cada tentativa
             print(f"Iniciando tentativa {retry + 1} de {max_retries}")
@@ -244,7 +244,7 @@ async def helper_interaction(event_data: dict = Body(...)):
 
         uri = f"/event-track/Interacoes-Fluxo?startDate={start_date}&endDate={end_date}&$take=10000"
 
-        max_retries = 4  # Defina o número máximo de tentativas
+        max_retries = 2  # Defina o número máximo de tentativas
         for retry in range(max_retries):
             tasks = []  # Limpe as tarefas antes de cada tentativa
 
